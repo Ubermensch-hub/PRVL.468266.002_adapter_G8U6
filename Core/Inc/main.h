@@ -42,6 +42,7 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 
+
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -69,10 +70,10 @@ void Error_Handler(void);
 #define PWR_SW_GPIO_Port GPIOA
 #define RST_SW_Pin GPIO_PIN_5
 #define RST_SW_GPIO_Port GPIOA
-#define MB_PWROKA6_Pin GPIO_PIN_6
-#define MB_PWROKA6_GPIO_Port GPIOA
 #define MCU_ATTACH_IN_Pin GPIO_PIN_7
 #define MCU_ATTACH_IN_GPIO_Port GPIOA
+#define PWR_LED_Pin GPIO_PIN_0
+#define PWR_LED_GPIO_Port GPIOB
 #define U3_FAN_I2C2_SCL_Pin GPIO_PIN_11
 #define U3_FAN_I2C2_SCL_GPIO_Port GPIOA
 #define U3_FAN_I2C2_SDA_Pin GPIO_PIN_12
