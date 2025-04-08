@@ -60,8 +60,6 @@ uint8_t MCU_attach=0;
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
-DMA_HandleTypeDef hdma_i2c1_rx;
-DMA_HandleTypeDef hdma_i2c1_tx;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
@@ -86,7 +84,6 @@ void CloseKey()
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM2_Init(void);
@@ -127,17 +124,17 @@ void ResetFan()
 	uint8_t pData[1] = {0x40};
 	uint8_t pData_2[1] = {0x02};
 	uint8_t pData_3[1] = {0xFF};
-	HAL_I2C_Mem_Write_DMA(&hi2c1, (0x51 << 1), MAX31760_CR1_REG, 1, pData, 1);
+	HAL_I2C_Mem_Write(&hi2c1, (0x51 << 1), MAX31760_CR1_REG, 1, pData, 1, 100);
 	HAL_Delay(200);
-	HAL_I2C_Mem_Write_DMA(&hi2c1, (0x51 << 1), 0x02, 1, pData_2, 1);
+	HAL_I2C_Mem_Write(&hi2c1, (0x51 << 1), 0x02, 1, pData_2, 1, 100);
 	HAL_Delay(50);
-	HAL_I2C_Mem_Write_DMA(&hi2c1, (0x51 << 1), 0x04, 1, pData_3, 1);
+	HAL_I2C_Mem_Write(&hi2c1, (0x51 << 1), 0x04, 1, pData_3, 1, 100);
 	HAL_Delay(50);
 	while (HAL_I2C_IsDeviceReady(&hi2c1, (0x54 << 1), 10, HAL_MAX_DELAY) != HAL_OK)
 	{}
-	HAL_I2C_Mem_Write_DMA(&hi2c1, (0x54<<1), MAX31760_CR1_REG, 1, pData, 1);
+	HAL_I2C_Mem_Write(&hi2c1, (0x54<<1), MAX31760_CR1_REG, 1, pData, 1, 100);
 	HAL_Delay(200);
-	HAL_I2C_Mem_Write_DMA(&hi2c1, (0x54 << 1), 0x04, 1, pData_3, 1);
+	HAL_I2C_Mem_Write(&hi2c1, (0x54 << 1), 0x04, 1, pData_3, 1, 100);
 	HAL_Delay(50);
 
 }
@@ -145,8 +142,8 @@ uint16_t ReadTachRegister(uint8_t address, uint8_t regMSB, uint8_t regLSB)
 {
 	uint8_t msb, lsb;  // @suppress("Multiple variable declaration")
 
-	HAL_I2C_Mem_Read_DMA(&hi2c1, address << 1, regMSB, I2C_MEMADD_SIZE_8BIT, &msb, 1);
-	HAL_I2C_Mem_Read_DMA(&hi2c1, address << 1, regLSB, I2C_MEMADD_SIZE_8BIT, &lsb, 1);
+	HAL_I2C_Mem_Read(&hi2c1, address << 1, regMSB, I2C_MEMADD_SIZE_8BIT, &msb, 1, 100);
+	HAL_I2C_Mem_Read(&hi2c1, address << 1, regLSB, I2C_MEMADD_SIZE_8BIT, &lsb, 1, 100);
 	return (msb << 8) | lsb; // Объединяем MSB и LSB в 16-битное значение
 }
 
@@ -158,11 +155,13 @@ void Read_Fan_Tachometer()
 	tachValue3 = ReadTachRegister(0x54, MAX31760_TACH1_MSB, MAX31760_TACH1_LSB); // Второй контроллер, первый тахометр
 	tachValue4 = ReadTachRegister(0x54, MAX31760_TACH2_MSB, MAX31760_TACH2_LSB); // Второй контроллер, второй тахометр
 }
+
 void ReadStatus()
 {
-	HAL_I2C_Mem_Read_DMA(&hi2c1,( 0x51 << 1), 0x5A, I2C_MEMADD_SIZE_8BIT, &statusFAN1, 1);
-	HAL_I2C_Mem_Read_DMA(&hi2c1, (0x54 << 1), 0x5A, I2C_MEMADD_SIZE_8BIT, &statusFAN2, 1);
+	HAL_I2C_Mem_Read(&hi2c1,( 0x51 << 1), 0x5A, I2C_MEMADD_SIZE_8BIT, &statusFAN1, 1, 100);
+	HAL_I2C_Mem_Read(&hi2c1, (0x54 << 1), 0x5A, I2C_MEMADD_SIZE_8BIT, &statusFAN2, 1, 100);
 }
+
 uint16_t CalculateRPM(uint16_t tachValue)
 {
 	if (tachValue == 0) return 0; // �?збегаем деления на ноль
@@ -200,53 +199,41 @@ void FanContrlSetDuty(I2C_HandleTypeDef *hi2c, uint16_t slaveAddress, uint8_t du
 {
 	uint8_t comm;
 	uint8_t aTxBuffer[1] = {0};
-	while (HAL_I2C_IsDeviceReady(hi2c, slaveAddress, 10, HAL_MAX_DELAY) != HAL_OK)
-	{
-	}
+
 
 	comm = MAX31760_PWM_DUTY_REG;
 	aTxBuffer[0] = duty;
-	HAL_I2C_Mem_Write_DMA(hi2c, slaveAddress, comm, 1, aTxBuffer, 1);
+	HAL_I2C_Mem_Write(hi2c, slaveAddress, comm, 1, aTxBuffer, 1, 100);
 
-	while (HAL_I2C_IsDeviceReady(hi2c, slaveAddress, 10, HAL_MAX_DELAY) != HAL_OK)
-	{
-	}
+
 
 	comm = _FAN2_FAIL_DUTY_REGISTER;
 	aTxBuffer[0] = duty;
-	HAL_I2C_Mem_Write_DMA(hi2c, slaveAddress, comm, 1, aTxBuffer, 1);
+	HAL_I2C_Mem_Write(hi2c, slaveAddress, comm, 1, aTxBuffer, 1, 100);
 }
 
 void SetPWMFrequency(uint8_t address, uint8_t frequencySetting) {
 	uint8_t data[2] = {MAX31760_CR1_REG, frequencySetting};
 
 	uint8_t data_2[2] = {MAX31760_CR2_REG, 0x11};
-	while (HAL_I2C_IsDeviceReady(&hi2c1, (address << 1), 10, HAL_MAX_DELAY) != HAL_OK)
-	{
-	}
-	HAL_I2C_Master_Transmit_DMA(&hi2c1, (address << 1), data, 2);
-	while (HAL_I2C_IsDeviceReady(&hi2c1, (address << 1), 10, HAL_MAX_DELAY) != HAL_OK)
-	{
-	}
 
-	HAL_I2C_Master_Transmit_DMA(&hi2c1, (address << 1), data_2, 2);
+	HAL_I2C_Master_Transmit(&hi2c1, (address << 1), data, 2, 100);
+
+
+	HAL_I2C_Master_Transmit(&hi2c1, (address << 1), data_2, 2, 100);
 }
 
 void WriteMAX31760Register(uint8_t address, uint8_t reg, uint8_t value) {
-	while (HAL_I2C_IsDeviceReady(&hi2c1, (address << 1), 10, 100) != HAL_OK)
-	{
-	}
+
 	uint8_t data[2] = {reg, value};
-	HAL_I2C_Master_Transmit_DMA(&hi2c1, (address << 1), data, 2);
+	HAL_I2C_Master_Transmit(&hi2c1, (address << 1), data, 2, 100);
 }
 
 void InitMAX31760(uint8_t address) {
 	// Установка частоты Ш�?М 24 кГц
 	// Значение для регистра 0x32 зависит от формулы в документации
 	// Например, если для 24 кГц нужно значение 0x4B:
-	while (HAL_I2C_IsDeviceReady(&hi2c1, (address << 1), 10, HAL_MAX_DELAY) != HAL_OK)
-	{
-	}
+
 	SetPWMFrequency(address, 0x19);
 	// Установка коэффициента заполнения Ш�?М 50%
 	FanContrlSetDuty(&hi2c1, (address << 1), 0xFF);
@@ -330,7 +317,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_TIM2_Init();
@@ -353,7 +339,7 @@ int main(void)
 	Command_temp = HAL_GPIO_ReadPin(MB_STATUS_LED_GPIO_Port, MB_STATUS_LED_Pin);
 
 
-	//	ReadStatus();
+	//ReadStatus();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -366,15 +352,11 @@ int main(void)
 
 		Command_temp = HAL_GPIO_ReadPin(MB_STATUS_LED_GPIO_Port, MB_STATUS_LED_Pin);
 		HAL_I2C_Slave_Receive_IT(&hi2c2, i2c_rx_buffer, 1);
-		SetTempMode();
-		Read_Fan_Tachometer();
-		Calculate_RPM();
-		Send_Fan_Tachometer_To_Motherboard();
 
 		// Управление вентиляторами
 		if (TempMode == 0) {
-			FanContrlSetDuty(&hi2c1, (0x54 << 1), 0xFF); // Установка Ш�?М на 50% для первого контроллера
-			FanContrlSetDuty(&hi2c1, (0x51 << 1), 0xFF); // Установка Ш�?М на 50% для второго контроллера
+			FanContrlSetDuty(&hi2c1, (0x54 << 1), 0xF0); // Установка Ш�?М на 50% для первого контроллера
+			FanContrlSetDuty(&hi2c1, (0x51 << 1), 0xF0); // Установка Ш�?М на 50% для второго контроллера
 		} else if (TempMode == 1) {
 			FanContrlSetDuty(&hi2c1, (0x54 << 1), 0x80); // Установка Ш�?М на 50% для первого контроллера
 			FanContrlSetDuty(&hi2c1, (0x51 << 1), 0x80); // Установка Ш�?М на 50% для второго контроллера
@@ -383,6 +365,10 @@ int main(void)
 			FanContrlSetDuty(&hi2c1, (0x51 << 1), 0xFF); // Установка Ш�?М на 50% для второго контроллера
 		}
 
+		if(Adapter_State == 1)
+		{
+			HAL_GPIO_WritePin(MB_BITCH_GPIO_Port, MB_BITCH_Pin, GPIO_PIN_RESET);
+		}
 
 
 	}
@@ -442,13 +428,13 @@ void SystemClock_Config(void)
 static void MX_NVIC_Init(void)
 {
   /* I2C1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(I2C1_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(I2C1_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(I2C1_IRQn);
   /* I2C2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(I2C2_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(I2C2_IRQn);
   /* TIM2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(TIM2_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(TIM2_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(TIM2_IRQn);
   /* TIM3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(TIM3_IRQn, 2, 0);
@@ -519,7 +505,7 @@ static void MX_I2C2_Init(void)
 
   /* USER CODE END I2C2_Init 1 */
   hi2c2.Instance = I2C2;
-  hi2c2.Init.Timing = 0x00C12469;
+  hi2c2.Init.Timing = 0x10801031;
   hi2c2.Init.OwnAddress1 = 74;
   hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -534,7 +520,7 @@ static void MX_I2C2_Init(void)
 
   /** Configure Analogue filter
   */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_DISABLE) != HAL_OK)
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
     Error_Handler();
   }
@@ -656,25 +642,6 @@ static void MX_TIM3_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel2_3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -747,8 +714,6 @@ void ProcessComand(uint8_t command)
 			CloseKey();
 			SetPWROK(HIGH);
 			HAL_Delay(300);
-
-
 			flag_receive = 0;
 			Adapter_State = 0;
 
@@ -777,7 +742,7 @@ void ProcessComand(uint8_t command)
 			SetButton(1);// Короткое нажатие
 			SetPWROK(HIGH);
 			CloseKey();
-			HAL_Delay(500);
+			HAL_Delay(5000);
 			OpenKey();
 			HAL_Delay(500);
 			PressButton(200);
@@ -791,7 +756,7 @@ void ProcessComand(uint8_t command)
 			HAL_Delay(7000);
 			flag_receive = 0;
 		}else {
-			HAL_Delay(300);
+
 			flag_receive = 0;
 			return;
 		}
@@ -811,7 +776,7 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 	}else
 	{
 		temperature = i2c_rx_buffer[0];
-
+		flag_receive = 0;
 	}
 	HAL_I2C_Slave_Receive_IT(&hi2c2, i2c_rx_buffer, 1);
 }
@@ -822,13 +787,14 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	if (htim->Instance == TIM1)
-	{
-		overflow_counter++;
-	}
+
 	if (htim->Instance == TIM3) // 1 раз в секунду
 	{
-		/*MB_State = HAL_GPIO_ReadPin(MB_PSON_GPIO_Port, MB_PSON_Pin);
+		Read_Fan_Tachometer();
+		Calculate_RPM();
+		Send_Fan_Tachometer_To_Motherboard();
+		SetTempMode();
+		MB_State = HAL_GPIO_ReadPin(MB_PSON_GPIO_Port, MB_PSON_Pin);
 		if (MB_State == 1 && Adapter_State == 0)//включение BMC
 		{
 			OpenKey();
@@ -838,11 +804,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 		} else if (MB_State == 0 && Adapter_State == 1)// выключение BMC
 		{
-			HAL_GPIO_WritePin(MCU_HOS_ON_GPIO_Port, MCU_HOS_ON_Pin, SET);
-			HAL_GPIO_WritePin(MB_BITCH_GPIO_Port, MB_BITCH_Pin, SET);
+			CloseKey();
+			HAL_Delay(100);
 			SetPWROK(HIGH);
 			Adapter_State = 0;
-		}*/
+		}
 
 	}
 }
